@@ -1,0 +1,259 @@
+# 鎌倉コミュニティ通貨アンケート 設問定義
+# このファイルを編集するだけで入力画面と集計が追従します
+# 変更時はアプリを再起動（またはページをリロード）してください
+
+# 調査地点の選択肢
+locations:
+  - "鎌倉駅東口"
+  - "小町通り入口"
+  - "鶴岡八幡宮周辺"
+
+# 設問定義
+# type: single_choice（単一選択）/ multi_choice（複数選択）/ free_text（自由記述）/ scale（段階評価）
+# required: 必須かどうか
+# branch: この設問が属する分岐（省略 = 全員に表示）
+# show_if: 表示条件（他の設問の回答に依存する場合）
+# has_other: 「その他（記述）」を追加するか
+# options[].branch: この選択肢を選んだら進む分岐（分岐決定設問のみ）
+# options[].tag: 集計時の絞り込みに使うタグ
+
+questions:
+  Q1:
+    text: "居住地"
+    type: single_choice
+    required: true
+    options:
+      - label: "鎌倉市内"
+        value: "kamakura"
+        tag: "resident"
+      - label: "神奈川県内（鎌倉市外）"
+        value: "kanagawa"
+      - label: "県外"
+        value: "other_pref"
+      - label: "海外"
+        value: "overseas"
+
+  Q2:
+    text: "鎌倉への来訪回数"
+    type: single_choice
+    required: true
+    options:
+      - label: "初めて"
+        value: "first"
+      - label: "2〜5回"
+        value: "2to5"
+      - label: "6回以上"
+        value: "6plus"
+      - label: "ほぼ毎日（通勤通学）"
+        value: "daily"
+
+  Q3:
+    text: "鎌倉で使える地域通貨やポイントサービスを知っていますか？"
+    description: "（純粋想起：名前を出さずに尋ねる）"
+    type: single_choice
+    required: true
+    options:
+      - label: "名前を言える"
+        value: "can_name"
+      - label: "聞いたことはある"
+        value: "heard"
+      - label: "知らない"
+        value: "unknown"
+
+  Q3_name:
+    text: "知っているサービスの名前"
+    type: free_text
+    required: true
+    show_if:
+      question_id: "Q3"
+      value: "can_name"
+
+  Q4:
+    text: "このサービスを見たことがありますか？"
+    description: "（助成想起：ロゴを提示して尋ねる）"
+    type: single_choice
+    required: true
+    options:
+      - label: "ある"
+        value: "yes"
+      - label: "ない"
+        value: "no"
+
+  Q4_2:
+    text: "どこで見ましたか？"
+    type: multi_choice
+    required: true
+    show_if:
+      question_id: "Q4"
+      value: "yes"
+    options:
+      - label: "駅のポスター"
+        value: "station_poster"
+      - label: "お店の掲示"
+        value: "shop_display"
+      - label: "SNS"
+        value: "sns"
+      - label: "知人から"
+        value: "acquaintance"
+      - label: "自治体の広報"
+        value: "municipal"
+      - label: "思い出せない"
+        value: "forgot"
+
+  Q5:
+    text: "まちのコイン（クルッポ）を使ったことがありますか？"
+    type: single_choice
+    required: true
+    determines_branch: true
+    options:
+      - label: "今も使っている"
+        value: "active"
+        branch: "A"
+      - label: "以前使ったが今は使っていない"
+        value: "lapsed"
+        branch: "A"
+      - label: "アプリは入れたが使っていない"
+        value: "installed_unused"
+        branch: "B"
+      - label: "ない"
+        value: "never"
+        branch: "B"
+
+  # --- 分岐A：利用経験あり ---
+  Q6_A:
+    text: "どんな場面で使いましたか？"
+    type: multi_choice
+    required: true
+    branch: "A"
+    has_other: true
+    options:
+      - label: "駅でのチェックイン"
+        value: "checkin"
+      - label: "お店での体験"
+        value: "shop_experience"
+      - label: "ごみ拾いなどのイベント"
+        value: "event"
+      - label: "給水スポット"
+        value: "water_spot"
+      - label: "友人に送った"
+        value: "sent_friend"
+
+  Q7_A:
+    text: "使ってみての感想を教えてください"
+    type: free_text
+    required: true
+    branch: "A"
+    codebook: "Q7_A"
+
+  Q8_A:
+    text: "使わなくなった理由は何ですか？"
+    type: multi_choice
+    required: true
+    branch: "A"
+    show_if:
+      question_id: "Q5"
+      value: "lapsed"
+    has_other: true
+    options:
+      - label: "使える店が少ない・わからない"
+        value: "few_shops"
+      - label: "面倒"
+        value: "troublesome"
+      - label: "貯めても使い道がない"
+        value: "no_use"
+      - label: "有効期限で失効した"
+        value: "expired"
+      - label: "鎌倉に来る機会がない"
+        value: "no_visit"
+
+  # --- 分岐B：利用経験なし ---
+  Q6_B:
+    text: "（サービスの説明後）使ってみたいと思いますか？"
+    type: scale
+    required: true
+    branch: "B"
+    options:
+      - label: "使ってみたい"
+        value: "5"
+      - label: "やや思う"
+        value: "4"
+      - label: "どちらとも言えない"
+        value: "3"
+      - label: "あまり思わない"
+        value: "2"
+      - label: "思わない"
+        value: "1"
+
+  Q7_B:
+    text: "その理由は何ですか？"
+    type: multi_choice
+    required: true
+    branch: "B"
+    has_other: true
+    options:
+      - label: "アプリを入れるのが面倒"
+        value: "app_trouble"
+      - label: "何に使えるのかわからない"
+        value: "unclear_use"
+      - label: "現金に換えられないなら意味がない"
+        value: "no_cash"
+      - label: "滞在時間が短く余裕がない"
+        value: "no_time"
+      - label: "観光中にスマホを操作したくない"
+        value: "no_phone"
+      - label: "得になる気がしない"
+        value: "no_benefit"
+
+  Q7_B_2:
+    text: "理由について、補足があれば教えてください"
+    type: free_text
+    required: false
+    branch: "B"
+    codebook: "Q7_B_2"
+
+  # --- 共通（全員） ---
+  Q9:
+    text: "年代"
+    type: single_choice
+    required: true
+    options:
+      - label: "10代"
+        value: "10s"
+      - label: "20代"
+        value: "20s"
+      - label: "30代"
+        value: "30s"
+      - label: "40代"
+        value: "40s"
+      - label: "50代"
+        value: "50s"
+      - label: "60代以上"
+        value: "60plus"
+
+  Q10:
+    text: "性別"
+    type: single_choice
+    required: true
+    options:
+      - label: "男性"
+        value: "male"
+      - label: "女性"
+        value: "female"
+      - label: "回答しない"
+        value: "no_answer"
+
+# 集計設定
+aggregation:
+  # クロス集計の軸
+  cross_tabs:
+    - question_id: "Q1"
+      label: "居住地別"
+    - question_id: "Q2"
+      label: "来訪回数別"
+    - question_id: "Q9"
+      label: "年代別"
+
+  # 純粋想起 vs 助成想起の比較
+  awareness_comparison:
+    unaided: "Q3"
+    aided: "Q4"

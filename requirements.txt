@@ -1,0 +1,7 @@
+streamlit>=1.38,<2.0
+supabase>=2.0,<3.0
+pyyaml>=6.0,<7.0
+pandas>=2.0,<3.0
+matplotlib>=3.8,<4.0
+scipy>=1.11,<2.0
+japanize-matplotlib>=1.1,<2.0

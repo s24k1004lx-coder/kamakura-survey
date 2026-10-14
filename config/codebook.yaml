@@ -1,0 +1,54 @@
+# 自由記述の分類カテゴリ定義（コードブック）
+# 設問ごとにカテゴリと定義を記述する
+# カテゴリの追加・変更はこのファイルを編集するだけで反映される
+
+codebooks:
+  Q7_A:
+    description: "使ってみての感想"
+    categories:
+      - code: "fun"
+        label: "楽しい・面白い"
+        definition: "利用体験自体を楽しいと感じた、面白いと感じたという趣旨の回答"
+      - code: "value"
+        label: "お得感がある"
+        definition: "金銭的な得、ポイントが貯まるなどの経済的メリットに言及した回答"
+      - code: "connection"
+        label: "地域とのつながりを感じた"
+        definition: "地域の人やお店との交流、地域への愛着に言及した回答"
+      - code: "confusing"
+        label: "使い方がわかりにくい"
+        definition: "操作方法やルールがわかりにくいという趣旨の回答"
+      - code: "few_places"
+        label: "使える場所が少ない"
+        definition: "利用可能な店舗やスポットの少なさに言及した回答"
+      - code: "nothing"
+        label: "特に何も感じない"
+        definition: "特に印象がない、無関心という趣旨の回答"
+      - code: "other"
+        label: "その他"
+        definition: "上記のいずれにも該当しない回答"
+
+  Q7_B_2:
+    description: "利用しない理由（自由記述補足）および各設問の「その他」記述"
+    categories:
+      - code: "hassle"
+        label: "手間・面倒"
+        definition: "アプリのインストールや操作が面倒、手間がかかるという趣旨の回答"
+      - code: "unclear_use"
+        label: "用途不明"
+        definition: "何に使えるのかわからない、メリットが不明という趣旨の回答"
+      - code: "no_value"
+        label: "価値を感じない"
+        definition: "使う価値がない、得にならないという趣旨の回答"
+      - code: "no_time"
+        label: "時間がない"
+        definition: "滞在時間の短さ、忙しさに言及した回答"
+      - code: "phone_resistance"
+        label: "スマホ操作の抵抗"
+        definition: "観光中にスマホを使いたくない、スマホ操作が苦手という趣旨の回答"
+      - code: "unaware"
+        label: "知らなかった"
+        definition: "サービスの存在自体を知らなかったという趣旨の回答"
+      - code: "other"
+        label: "その他"
+        definition: "上記のいずれにも該当しない回答"
