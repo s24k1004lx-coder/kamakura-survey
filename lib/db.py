@@ -7,7 +7,10 @@ from supabase import create_client
 
 @st.cache_resource
 def _get_client():
-    return create_client(st.secrets["supabase"]["url"], st.secrets["supabase"]["key"])
+    # Streamlit Cloud で見えないUnicode文字混入を防ぐ
+    url = st.secrets["supabase"]["url"].strip()
+    key = st.secrets["supabase"]["key"].strip()
+    return create_client(url, key)
 
 
 def client():
