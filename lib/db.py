@@ -5,12 +5,15 @@ import streamlit as st
 from supabase import create_client
 
 
+def _clean(s):
+    """非ASCII文字を除去してクリーンな文字列にする"""
+    return s.encode("ascii", "ignore").decode("ascii").strip()
+
+
 @st.cache_resource
 def _get_client():
-    # Streamlit Cloud で見えないUnicode文字混入を防ぐ
-    url = st.secrets["supabase"]["url"].strip()
-    key = st.secrets["supabase"]["key"].strip()
-    return create_client(url, key)
+    return create_client(_clean(st.secrets["supabase"]["url"]),
+                         _clean(st.secrets["supabase"]["key"]))
 
 
 def client():
