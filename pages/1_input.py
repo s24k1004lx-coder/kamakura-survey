@@ -32,6 +32,10 @@ def _member_answers(m):
             v = st.session_state.get(k)
             if v is not None:
                 out[qid] = {"value": v}
+                if q.get("has_other") and v == "other":
+                    txt = st.session_state.get(f"{k}_other_txt", "")
+                    if txt:
+                        out[f"{qid}_other"] = {"value": txt}
 
         elif q["type"] == "multi_choice":
             sel = [o["value"] for o in q.get("options", [])
@@ -136,11 +140,18 @@ def _render_widget(qid, q, m, solo):
     if q["type"] in ("single_choice", "scale"):
         opts = [o["value"] for o in q["options"]]
         labs = {o["value"]: o["label"] for o in q["options"]}
+        if q.get("has_other"):
+            opts.append("other")
+            labs["other"] = "その他"
         lbl = "選択" if solo else f"メンバー {m}"
         st.radio(lbl, opts, format_func=lambda v, _l=labs: _l.get(v, v),
                  index=None, key=k, label_visibility="collapsed" if solo else "visible")
+        if q.get("has_other") and st.session_state.get(k) == "other":
+            st.text_input("その他の内容", key=f"{k}_other_txt")
 
     elif q["type"] == "multi_choice":
+        if q.get("max_select"):
+            st.caption(f"（最大{q['max_select']}つまで）")
         for o in q["options"]:
             st.checkbox(o["label"], key=f"{k}_{o['value']}")
         if q.get("has_other"):
@@ -164,6 +175,8 @@ def _copy_all(qid, q, members):
         t = f"q_{qid}_m{m}"
         if q["type"] in ("single_choice", "scale", "free_text"):
             st.session_state[t] = st.session_state.get(s)
+            if q.get("has_other"):
+                st.session_state[f"{t}_other_txt"] = st.session_state.get(f"{s}_other_txt", "")
         elif q["type"] == "multi_choice":
             for o in q.get("options", []):
                 st.session_state[f"{t}_{o['value']}"] = st.session_state.get(f"{s}_{o['value']}", False)
@@ -191,12 +204,15 @@ def _validate(qid, q, members):
                 errs.append(f"{label}選択してください")
 
         elif q["type"] == "multi_choice":
-            has = any(st.session_state.get(f"{k}_{o['value']}", False)
-                      for o in q.get("options", []))
+            count = sum(1 for o in q.get("options", [])
+                        if st.session_state.get(f"{k}_{o['value']}", False))
             if q.get("has_other") and st.session_state.get(f"{k}_other_chk", False):
-                has = True
-            if not has:
+                count += 1
+            if count == 0:
                 errs.append(f"{label}1つ以上選択してください")
+            max_sel = q.get("max_select")
+            if max_sel and count > max_sel:
+                errs.append(f"{label}{max_sel}つまで選択してください")
 
         elif q["type"] == "free_text":
             if not st.session_state.get(k, "").strip():

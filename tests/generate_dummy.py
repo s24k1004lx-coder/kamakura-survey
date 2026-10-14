@@ -26,30 +26,36 @@ def random_answer(qid, q, branch):
     """設問に対するランダム回答を生成"""
     if q["type"] in ("single_choice", "scale"):
         opt = random.choice(q["options"])
-        return {"value": opt["value"]}
+        ans = {"value": opt["value"]}
+        if q.get("has_other") and random.random() < 0.15:
+            ans["value"] = "other"
+            ans["other_text"] = f"ダミーその他_{qid}"
+        return ans
 
     elif q["type"] == "multi_choice":
-        n = random.randint(1, min(3, len(q["options"])))
+        max_sel = q.get("max_select", len(q["options"]))
+        n = random.randint(1, min(max_sel, len(q["options"])))
         sel = random.sample(q["options"], n)
         vals = [o["value"] for o in sel]
         ans = {"values": vals}
 
         if q.get("has_other") and random.random() < 0.2:
-            vals.append("other")
-            ans["other_text"] = f"ダミー自由記述_{qid}"
+            if len(vals) < max_sel:
+                vals.append("other")
+                ans["other_text"] = f"ダミー自由記述_{qid}"
         return ans
 
     elif q["type"] == "free_text":
         texts = {
-            "Q3_name": ["クルッポ", "まちのコイン", "鎌倉コイン", "知らないけど聞いたことある"],
-            "Q7_A": [
+            "Q4_name": ["クルッポ", "まちのコイン", "鎌倉コイン", "聞いたことある気がする"],
+            "A6": [
                 "面白かった。ポイントが貯まるのが楽しい",
                 "チェックインが簡単で良かった",
                 "使える場所が少なくて困った",
                 "地元の人との交流ができてよかった",
-                "アプリの操作が分かりにくかった",
+                "終了するのが残念",
             ],
-            "Q7_B_2": [
+            "B2": [
                 "特にない",
                 "旅行中にアプリを使うのは面倒",
                 "還元率が低そう",
@@ -71,14 +77,26 @@ def generate_one_member(force_branch=None):
     for qid in get_question_ids():
         q = QUESTIONS[qid]
 
-        # Q5 で分岐を制御
-        if qid == "Q5" and force_branch:
+        # Q6 で分岐を制御
+        if qid == "Q6" and force_branch:
             if force_branch == "A":
                 val = random.choice(["active", "lapsed"])
-            else:
+            elif force_branch == "B":
                 val = random.choice(["installed_unused", "never"])
+                # "never" で B になるには Q5=yes が必要
+                if val == "never":
+                    answers["Q5"] = {"value": "yes"}
+            else:
+                val = "never"
             answers[qid] = {"value": val}
-            branch = force_branch
+            opt = next((o for o in q["options"] if o["value"] == val), None)
+            if opt and "branch" in opt:
+                branch = opt["branch"]
+            elif opt and "branch_if" in opt:
+                cond = opt["branch_if"]
+                dep = answers.get(cond["question_id"], {}).get("value")
+                if dep == cond["value"]:
+                    branch = cond["branch"]
             continue
 
         if not should_show_question(qid, answers, branch):
@@ -90,8 +108,14 @@ def generate_one_member(force_branch=None):
         # 分岐判定
         if q.get("determines_branch") and "value" in ans:
             opt = next((o for o in q["options"] if o["value"] == ans["value"]), None)
-            if opt and "branch" in opt:
-                branch = opt["branch"]
+            if opt:
+                if "branch" in opt:
+                    branch = opt["branch"]
+                elif "branch_if" in opt:
+                    cond = opt["branch_if"]
+                    dep = answers.get(cond["question_id"], {}).get("value")
+                    if dep == cond["value"]:
+                        branch = cond["branch"]
 
         # _other 用レコード
         if ans.get("other_text"):
@@ -149,7 +173,7 @@ def main():
         else:
             gs = random.randint(2, 4)
 
-        # グループ内の分岐を揃える場合と混在する場合
+        # 分岐の指定: A, B, または None（ランダム）
         force = random.choice(["A", "B", None])
 
         all_ans = {}

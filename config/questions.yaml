@@ -8,16 +8,24 @@ locations:
   - "小町通り入口"
   - "鶴岡八幡宮周辺"
 
+# 冒頭文（調査員が読み上げる）
+preamble: >
+  千葉工業大学の学生です。卒業研究で、鎌倉の観光と地域の取り組みについて調査しています。
+  1〜2分で終わります。お名前など個人情報は伺いません。
+
 # 設問定義
-# type: single_choice（単一選択）/ multi_choice（複数選択）/ free_text（自由記述）/ scale（段階評価）
+# type: single_choice / multi_choice / free_text / scale
 # required: 必須かどうか
 # branch: この設問が属する分岐（省略 = 全員に表示）
-# show_if: 表示条件（他の設問の回答に依存する場合）
-# has_other: 「その他（記述）」を追加するか
-# options[].branch: この選択肢を選んだら進む分岐（分岐決定設問のみ）
-# options[].tag: 集計時の絞り込みに使うタグ
+# show_if: 表示条件（他の設問の回答に依存）
+# has_other: 「その他（記述）」を追加
+# max_select: 複数選択の上限数
+# determines_branch: 分岐を決定する設問
+# options[].branch: この選択肢を選んだ場合の分岐先
+# options[].branch_if: 条件付き分岐（他の設問の値で分岐先が変わる場合）
 
 questions:
+  # === 基本属性 ===
   Q1:
     text: "居住地"
     type: single_choice
@@ -48,8 +56,23 @@ questions:
         value: "daily"
 
   Q3:
-    text: "鎌倉で使える地域通貨やポイントサービスを知っていますか？"
-    description: "（純粋想起：名前を出さずに尋ねる）"
+    text: "今日の滞在予定"
+    type: single_choice
+    required: true
+    options:
+      - label: "2時間未満"
+        value: "under_2h"
+      - label: "半日程度"
+        value: "half_day"
+      - label: "1日"
+        value: "full_day"
+      - label: "宿泊"
+        value: "overnight"
+
+  # === クルッポの認知 ===
+  Q4:
+    text: "鎌倉で使える地域通貨やポイントサービスをご存じですか"
+    description: "（純粋想起：名前を出さずに尋ねる。グループの場合「せーの」で同時に）"
     type: single_choice
     required: true
     options:
@@ -60,17 +83,17 @@ questions:
       - label: "知らない"
         value: "unknown"
 
-  Q3_name:
+  Q4_name:
     text: "知っているサービスの名前"
     type: free_text
     required: true
     show_if:
-      question_id: "Q3"
+      question_id: "Q4"
       value: "can_name"
 
-  Q4:
+  Q5:
     text: "このサービスを見たことがありますか？"
-    description: "（助成想起：ロゴを提示して尋ねる）"
+    description: "（助成想起：ロゴ・アプリ画面を提示して尋ねる）"
     type: single_choice
     required: true
     options:
@@ -79,12 +102,12 @@ questions:
       - label: "ない"
         value: "no"
 
-  Q4_2:
+  Q5_2:
     text: "どこで見ましたか？"
     type: multi_choice
     required: true
     show_if:
-      question_id: "Q4"
+      question_id: "Q5"
       value: "yes"
     options:
       - label: "駅のポスター"
@@ -100,7 +123,7 @@ questions:
       - label: "思い出せない"
         value: "forgot"
 
-  Q5:
+  Q6:
     text: "まちのコイン（クルッポ）を使ったことがありますか？"
     type: single_choice
     required: true
@@ -115,12 +138,15 @@ questions:
       - label: "アプリは入れたが使っていない"
         value: "installed_unused"
         branch: "B"
-      - label: "ない"
+      - label: "使ったことはない"
         value: "never"
-        branch: "B"
+        branch_if:
+          question_id: "Q5"
+          value: "yes"
+          branch: "B"
 
-  # --- 分岐A：利用経験あり ---
-  Q6_A:
+  # === 分岐A：利用経験あり ===
+  A1:
     text: "どんな場面で使いましたか？"
     type: multi_choice
     required: true
@@ -138,54 +164,90 @@ questions:
       - label: "友人に送った"
         value: "sent_friend"
 
-  Q7_A:
-    text: "使ってみての感想を教えてください"
-    type: free_text
-    required: true
-    branch: "A"
-    codebook: "Q7_A"
-
-  Q8_A:
-    text: "使わなくなった理由は何ですか？"
+  A2:
+    text: "良かった点"
     type: multi_choice
     required: true
     branch: "A"
-    show_if:
-      question_id: "Q5"
-      value: "lapsed"
     has_other: true
     options:
-      - label: "使える店が少ない・わからない"
+      - label: "楽しい・ゲーム感覚"
+        value: "fun"
+      - label: "お得感"
+        value: "good_deal"
+      - label: "地域や人とのつながり"
+        value: "community"
+      - label: "新しい店を知れた"
+        value: "new_shops"
+      - label: "SDGsに貢献できた"
+        value: "sdgs"
+      - label: "特になし"
+        value: "none"
+
+  A3:
+    text: "不満だった点"
+    type: multi_choice
+    required: true
+    branch: "A"
+    has_other: true
+    options:
+      - label: "使える店・体験が少ない"
         value: "few_shops"
-      - label: "面倒"
-        value: "troublesome"
-      - label: "貯めても使い道がない"
+      - label: "使い道がない"
         value: "no_use"
+      - label: "操作が面倒"
+        value: "troublesome"
       - label: "有効期限で失効した"
         value: "expired"
-      - label: "鎌倉に来る機会がない"
+      - label: "鎌倉に来る機会が少ない"
         value: "no_visit"
+      - label: "特になし"
+        value: "none"
 
-  # --- 分岐B：利用経験なし ---
-  Q6_B:
-    text: "（サービスの説明後）使ってみたいと思いますか？"
-    type: scale
+  A4:
+    text: "使わなくなった一番の理由"
+    type: single_choice
     required: true
-    branch: "B"
+    branch: "A"
+    has_other: true
+    show_if:
+      question_id: "Q6"
+      value: "lapsed"
     options:
-      - label: "使ってみたい"
-        value: "5"
-      - label: "やや思う"
-        value: "4"
-      - label: "どちらとも言えない"
-        value: "3"
-      - label: "あまり思わない"
-        value: "2"
-      - label: "思わない"
-        value: "1"
+      - label: "使える店・体験が少ない"
+        value: "few_shops"
+      - label: "使い道がない"
+        value: "no_use"
+      - label: "操作が面倒"
+        value: "troublesome"
+      - label: "有効期限で失効した"
+        value: "expired"
+      - label: "鎌倉に来る機会が少ない"
+        value: "no_visit"
+      - label: "特になし"
+        value: "none"
 
-  Q7_B:
-    text: "その理由は何ですか？"
+  A5:
+    text: "クルッポが2027年3月で終了することを知っていましたか？"
+    type: single_choice
+    required: true
+    branch: "A"
+    options:
+      - label: "知っていた"
+        value: "knew"
+      - label: "知らなかった"
+        value: "didnt_know"
+
+  A6:
+    text: "使ってみての感想を一言"
+    type: free_text
+    required: false
+    branch: "A"
+    codebook: "A6"
+
+  # === 分岐B：知っていたが使わなかった ===
+  B1:
+    text: "使わなかった理由"
     type: multi_choice
     required: true
     branch: "B"
@@ -204,15 +266,72 @@ questions:
       - label: "得になる気がしない"
         value: "no_benefit"
 
-  Q7_B_2:
-    text: "理由について、補足があれば教えてください"
+  B2:
+    text: "理由の補足"
     type: free_text
     required: false
     branch: "B"
-    codebook: "Q7_B_2"
+    codebook: "B2"
 
-  # --- 共通（全員） ---
-  Q9:
+  # === 共通（全員） ===
+  C1:
+    text: "観光中に、次の行動で特典がもらえるとしたら、やってみたいもの"
+    description: "鎌倉では、観光客に混雑を避けたり、ごみを減らしたりしてもらう取り組みが検討されています。"
+    type: multi_choice
+    required: true
+    options:
+      - label: "混雑していない時間帯・場所を選んで回る"
+        value: "avoid_crowd"
+      - label: "ごみを持ち帰る・ごみ拾いに参加する"
+        value: "trash"
+      - label: "地元の個人店に立ち寄る"
+        value: "local_shop"
+      - label: "車でなく公共交通で来る"
+        value: "public_transport"
+      - label: "マイボトルで給水する"
+        value: "my_bottle"
+      - label: "寺社の参拝マナーを学ぶ（クイズなど）"
+        value: "manner_quiz"
+      - label: "どれもやらない"
+        value: "none"
+
+  C2:
+    text: "魅力的な特典（最大2つまで）"
+    type: multi_choice
+    required: true
+    max_select: 2
+    options:
+      - label: "割引・金券（お金と同じように使える）"
+        value: "discount"
+      - label: "限定体験（裏メニュー・特別拝観など）"
+        value: "exclusive"
+      - label: "記念品・グッズ"
+        value: "souvenir"
+      - label: "抽選で豪華景品"
+        value: "lottery"
+      - label: "地域への寄付・貢献に使われる"
+        value: "donation"
+      - label: "特典はいらない"
+        value: "no_reward"
+
+  C3:
+    text: "参加するとしたら、どこまでの手間なら許容できますか？"
+    type: single_choice
+    required: true
+    options:
+      - label: "専用アプリを入れてもよい"
+        value: "app_ok"
+      - label: "LINEの友だち登録までなら"
+        value: "line_ok"
+      - label: "QRを読むだけ（アプリ不要）なら"
+        value: "qr_only"
+      - label: "紙のスタンプカードなら"
+        value: "paper_stamp"
+      - label: "手間がかかるなら参加しない"
+        value: "no_effort"
+
+  # === 属性 ===
+  Q7:
     text: "年代"
     type: single_choice
     required: true
@@ -230,7 +349,7 @@ questions:
       - label: "60代以上"
         value: "60plus"
 
-  Q10:
+  Q8:
     text: "性別"
     type: single_choice
     required: true
@@ -244,16 +363,16 @@ questions:
 
 # 集計設定
 aggregation:
-  # クロス集計の軸
   cross_tabs:
     - question_id: "Q1"
       label: "居住地別"
     - question_id: "Q2"
       label: "来訪回数別"
-    - question_id: "Q9"
+    - question_id: "Q3"
+      label: "滞在予定別"
+    - question_id: "Q7"
       label: "年代別"
 
-  # 純粋想起 vs 助成想起の比較
   awareness_comparison:
-    unaided: "Q3"
-    aided: "Q4"
+    unaided: "Q4"
+    aided: "Q5"

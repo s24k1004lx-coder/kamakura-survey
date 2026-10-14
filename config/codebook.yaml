@@ -3,8 +3,8 @@
 # カテゴリの追加・変更はこのファイルを編集するだけで反映される
 
 codebooks:
-  Q7_A:
-    description: "使ってみての感想"
+  A6:
+    description: "使ってみての感想を一言"
     categories:
       - code: "fun"
         label: "楽しい・面白い"
@@ -21,6 +21,9 @@ codebooks:
       - code: "few_places"
         label: "使える場所が少ない"
         definition: "利用可能な店舗やスポットの少なさに言及した回答"
+      - code: "ending"
+        label: "終了が残念"
+        definition: "サービス終了に対する残念さや惜しむ趣旨の回答"
       - code: "nothing"
         label: "特に何も感じない"
         definition: "特に印象がない、無関心という趣旨の回答"
@@ -28,8 +31,8 @@ codebooks:
         label: "その他"
         definition: "上記のいずれにも該当しない回答"
 
-  Q7_B_2:
-    description: "利用しない理由（自由記述補足）および各設問の「その他」記述"
+  B2:
+    description: "使わなかった理由の補足"
     categories:
       - code: "hassle"
         label: "手間・面倒"

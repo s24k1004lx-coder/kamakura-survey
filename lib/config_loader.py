@@ -73,8 +73,16 @@ def determine_branch(member_answers):
         if value is None:
             return None
         for opt in q["options"]:
-            if opt["value"] == value and "branch" in opt:
+            if opt["value"] != value:
+                continue
+            if "branch" in opt:
                 return opt["branch"]
+            # 条件付き分岐: 別の設問の回答で分岐先が決まる
+            if "branch_if" in opt:
+                cond = opt["branch_if"]
+                dep = member_answers.get(cond["question_id"], {}).get("value")
+                if dep == cond["value"]:
+                    return cond["branch"]
     return None
 
 
