@@ -16,7 +16,11 @@ CREATE TABLE survey_groups (
     group_size INTEGER NOT NULL CHECK (group_size >= 1 AND group_size <= 6),
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at TIMESTAMPTZ,
-    session_draft JSONB
+    session_draft JSONB,
+    started_at TIMESTAMPTZ,                       -- 入力開始時刻
+    saved_at TIMESTAMPTZ,                         -- 保存時刻
+    duration_sec INTEGER CHECK (duration_sec >= 0), -- 所要時間（秒）
+    stumble_flags JSONB NOT NULL DEFAULT '{}'::jsonb -- つまずきフラグ {設問ID: メモ}
 );
 
 -- ============================================================
@@ -29,7 +33,8 @@ CREATE TABLE responses (
     conformity_flag BOOLEAN NOT NULL DEFAULT FALSE,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at TIMESTAMPTZ,
-    branch TEXT CHECK (branch IN ('A', 'B'))
+    branch TEXT CHECK (branch IN ('A', 'B')),
+    response_mode TEXT CHECK (response_mode IN ('interviewer', 'self')) -- 回答方式
 );
 
 -- ============================================================
@@ -48,7 +53,7 @@ CREATE TABLE answers (
 -- ============================================================
 CREATE TABLE edit_history (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    target_type TEXT NOT NULL CHECK (target_type IN ('group', 'response', 'answer')),
+    target_type TEXT NOT NULL CHECK (target_type IN ('group', 'response', 'answer', 'refusal', 'day_note')),
     target_id UUID NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'restore')),
     old_value JSONB,
@@ -71,6 +76,31 @@ CREATE TABLE classifications (
 );
 
 -- ============================================================
+-- refusals: 声かけして断られた記録（「1つ戻す」は論理削除）
+-- ============================================================
+CREATE TABLE refusals (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    location TEXT NOT NULL,
+    survey_type TEXT NOT NULL CHECK (survey_type IN ('pretest', 'main')),
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at TIMESTAMPTZ
+);
+
+-- ============================================================
+-- survey_day_notes: 調査日メモ（1日1行）
+-- ============================================================
+CREATE TABLE survey_day_notes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    survey_date DATE NOT NULL UNIQUE,
+    weather TEXT,
+    crowd TEXT,
+    note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- インデックス
 -- ============================================================
 CREATE INDEX idx_responses_group_id ON responses(group_id);
@@ -79,6 +109,7 @@ CREATE INDEX idx_answers_question_id ON answers(question_id);
 CREATE INDEX idx_edit_history_target ON edit_history(target_type, target_id);
 CREATE INDEX idx_classifications_answer_id ON classifications(answer_id);
 CREATE INDEX idx_survey_groups_not_deleted ON survey_groups(created_at) WHERE NOT is_deleted;
+CREATE INDEX idx_refusals_created_at ON refusals(created_at) WHERE NOT is_deleted;
 
 -- ============================================================
 -- RLS (Row Level Security) ポリシー
@@ -89,6 +120,8 @@ ALTER TABLE responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE edit_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE classifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refusals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE survey_day_notes ENABLE ROW LEVEL SECURITY;
 
 -- anon ロールに全操作を許可（アプリ側でパスワード認証するため）
 CREATE POLICY "Allow all for anon" ON survey_groups FOR ALL USING (true) WITH CHECK (true);
@@ -96,3 +129,5 @@ CREATE POLICY "Allow all for anon" ON responses FOR ALL USING (true) WITH CHECK 
 CREATE POLICY "Allow all for anon" ON answers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON edit_history FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON classifications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for anon" ON refusals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for anon" ON survey_day_notes FOR ALL USING (true) WITH CHECK (true);

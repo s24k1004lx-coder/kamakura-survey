@@ -1,11 +1,19 @@
 """回答入力画面 — 設問ウィザード形式（一人・グループ両対応）"""
 import json
+from datetime import datetime, timezone
 import streamlit as st
 from lib.config_loader import (
     get_questions, get_question_ids, get_locations,
     should_show_question, determine_branch, get_option_label,
 )
 from lib import db
+from lib.session import keep_input_state, INPUT_WIDGET_PREFIXES
+
+# 回答方式（回答ごとに記録）
+RESPONSE_MODES = {"interviewer": "調査員が読み上げ", "self": "本人が記入"}
+# 調査日メモの選択肢
+WEATHER_OPTIONS = ["晴れ", "くもり", "雨", "雪", "その他"]
+CROWD_OPTIONS = ["空いている", "ふつう", "混んでいる", "非常に混んでいる"]
 
 
 # ============================================================
@@ -14,6 +22,8 @@ from lib import db
 
 def _init():
     """初期化（phase がなければ setup から開始）"""
+    # 前の設問の回答が消えないようにする（ウィジェット描画より前に呼ぶ必要がある）
+    keep_input_state()
     if "sv_phase" not in st.session_state:
         st.session_state.sv_phase = "setup"
     if "sv_history" not in st.session_state:
@@ -103,7 +113,7 @@ def _save_draft_to_db():
     """現在の入力状態をDBの session_draft に保存"""
     setup = st.session_state.sv_setup
     widgets = {k: st.session_state[k] for k in st.session_state
-               if k.startswith(("q_", "conformity_"))}
+               if k.startswith(INPUT_WIDGET_PREFIXES)}
     payload = {
         "draft_id": st.session_state.get("sv_draft_id"),
         "setup": setup,
@@ -221,15 +231,102 @@ def _validate(qid, q, members):
 
 
 # ============================================================
+# 声かけカウンター（画面上部に常時表示）
+# ============================================================
+
+def _current_place():
+    """断り記録に付ける (調査地点, 調査区分)。入力中ならその設定、設定画面なら選択中の値。"""
+    setup = st.session_state.get("sv_setup")
+    if setup and st.session_state.get("sv_phase") in ("questions", "review"):
+        return setup["location"], setup["survey_type"]
+    sticky = st.session_state.get("sticky_setup", {})
+    loc = st.session_state.get("su_loc") or sticky.get("location") or get_locations()[0]
+    stype = st.session_state.get("su_type") or sticky.get("survey_type_label", "本調査")
+    return loc, ("main" if stype == "本調査" else "pretest")
+
+
+def _on_refused():
+    loc, stype = _current_place()
+    db.add_refusal(loc, stype)
+    st.toast(f"断られた を記録しました（{loc}）")
+
+
+def _on_undo_refused():
+    row = db.undo_last_refusal()
+    st.toast("直前の「断られた」を1件取り消しました" if row else "今日の「断られた」記録はありません")
+
+
+def _render_counter():
+    try:
+        refused, answered = db.get_today_contact_counts()
+    except Exception:
+        st.warning("声かけカウンターを読み込めません。"
+                   "Supabase で docs/migration_phase2_5.sql を実行してください。")
+        return
+    contacts = refused + answered
+    rate = f"{answered / contacts * 100:.1f}%" if contacts else "—"
+    with st.container(border=True):
+        st.markdown(f"**声かけ {contacts}件 ／ 回答 {answered}件 ／ 回答率 {rate}**",
+                    help="今日・現地入力分。回答は保存すると自動で+1（1組=声かけ1回）")
+        # スマホでも横並びのままにする（st.columns は狭い画面で縦に積まれるため）
+        with st.container(horizontal=True):
+            st.button("🙅 断られた +1", on_click=_on_refused, key="cnt_refused", width="stretch")
+            st.button("↩ 戻す", on_click=_on_undo_refused, key="cnt_undo")
+
+
+# ============================================================
+# 調査日メモ
+# ============================================================
+
+def _render_day_note():
+    today = db.today_jst()
+    with st.expander(f"📝 調査日メモ（{today.strftime('%m/%d')}の天気・混雑・気づき）"):
+        try:
+            cur = db.get_day_note(today) or {}
+        except Exception:
+            st.warning("調査日メモを読み込めません（docs/migration_phase2_5.sql が未実行かもしれません）")
+            return
+        with st.form("day_note_form"):
+            w = cur.get("weather")
+            weather = st.radio("天気", WEATHER_OPTIONS, horizontal=True,
+                               index=WEATHER_OPTIONS.index(w) if w in WEATHER_OPTIONS else None)
+            c = cur.get("crowd")
+            crowd = st.radio("混雑具合", CROWD_OPTIONS, horizontal=True,
+                             index=CROWD_OPTIONS.index(c) if c in CROWD_OPTIONS else None)
+            note = st.text_area("気づいたこと", value=cur.get("note") or "",
+                                placeholder="例：午後から団体客が増えた、駅前は立ち止まってもらいにくい")
+            if st.form_submit_button("メモを保存", use_container_width=True):
+                db.save_day_note(today, weather, crowd, note.strip())
+                st.success("保存しました")
+
+
+# ============================================================
 # 画面: セットアップ
 # ============================================================
+
+def _sticky_index(options, key):
+    """前回の設定値を初期選択にする（連続して入力するとき毎回選び直さなくて済むように）"""
+    v = st.session_state.get("sticky_setup", {}).get(key)
+    return options.index(v) if v in options else 0
+
 
 def _page_setup():
     st.subheader("調査の設定")
 
-    loc = st.selectbox("調査地点", get_locations(), key="su_loc")
-    stype = st.radio("調査区分", ["本調査", "プレテスト"], key="su_type", horizontal=True)
-    imethod = st.radio("入力方法", ["現地入力", "紙からの転記"], key="su_meth", horizontal=True)
+    locs = get_locations()
+    loc = st.selectbox("調査地点", locs, key="su_loc",
+                       index=_sticky_index(locs, "location"))
+    stype_opts = ["本調査", "プレテスト"]
+    stype = st.radio("調査区分", stype_opts, key="su_type", horizontal=True,
+                     index=_sticky_index(stype_opts, "survey_type_label"))
+    meth_opts = ["現地入力", "紙からの転記"]
+    imethod = st.radio("入力方法", meth_opts, key="su_meth", horizontal=True,
+                       index=_sticky_index(meth_opts, "input_method_label"))
+    rmode_opts = list(RESPONSE_MODES)
+    rmode = st.radio("回答方式", rmode_opts, key="su_rmode", horizontal=True,
+                     format_func=RESPONSE_MODES.get,
+                     index=_sticky_index(rmode_opts, "response_mode"),
+                     help="グループの場合は確認画面でメンバーごとに変更できます")
 
     st.markdown("---")
     mode = st.radio("回答者", ["一人", "グループ"], key="su_mode", horizontal=True)
@@ -257,11 +354,18 @@ def _page_setup():
 
     st.markdown("---")
     if st.button("入力開始", use_container_width=True, type="primary"):
+        st.session_state.sticky_setup = {
+            "location": loc, "survey_type_label": stype,
+            "input_method_label": imethod, "response_mode": rmode,
+        }
         st.session_state.sv_setup = {
             "location": loc,
             "survey_type": "main" if stype == "本調査" else "pretest",
             "input_method": "field" if imethod == "現地入力" else "transcription",
             "group_size": gs,
+            "response_mode": rmode,
+            # 所要時間の計測開始（保存時との差を秒で記録する）
+            "started_at": datetime.now(timezone.utc).isoformat(),
         }
         first = _first_qid(gs)
         if first:
@@ -270,6 +374,9 @@ def _page_setup():
             st.session_state.sv_history = [first]
             _save_draft_to_db()
         st.rerun()
+
+    st.markdown("---")
+    _render_day_note()
 
 
 # ============================================================
@@ -287,8 +394,13 @@ def _page_question():
     ids = get_question_ids()
     st.progress((ids.index(cur) + 1) / len(ids))
 
-    # 設問テキスト
+    # 設問テキスト ＋ つまずきフラグ
     st.subheader(q["text"])
+    st.toggle("⚠️ つまずき", key=f"flag_{cur}",
+              help="回答者が迷った・意味が伝わらなかった設問に印をつける")
+    if st.session_state.get(f"flag_{cur}"):
+        st.text_input("つまずきメモ（任意）", key=f"flagmemo_{cur}",
+                      placeholder="例：「地域通貨」の意味が伝わらなかった")
     if "description" in q:
         st.caption(q["description"])
 
@@ -386,8 +498,21 @@ def _page_review():
             display = _format_answer(qid, q, a, ans)
             st.text(f"{q['text']}: {display}")
 
+        # 回答方式（設定画面の値が初期値。メンバーごとに変更可）
+        rk = f"rmode_m{m}"
+        if rk not in st.session_state:
+            st.session_state[rk] = setup.get("response_mode", "interviewer")
+        st.radio("回答方式", list(RESPONSE_MODES), key=rk, horizontal=True,
+                 format_func=RESPONSE_MODES.get)
         if not solo:
             st.checkbox("同調の可能性あり", key=f"conformity_m{m}")
+        st.markdown("---")
+
+    flags = _stumble_flags()
+    if flags:
+        st.markdown("**⚠️ つまずきフラグ**")
+        for qid, memo in flags.items():
+            st.text(f"・{questions[qid]['text']}" + (f"：{memo}" if memo else ""))
         st.markdown("---")
 
     c1, c2 = st.columns(2)
@@ -447,18 +572,33 @@ def _do_save():
 
     flags = {m: st.session_state.get(f"conformity_m{m}", False)
              for m in range(1, gs + 1)}
+    modes = {m: st.session_state.get(f"rmode_m{m}", setup.get("response_mode"))
+             for m in range(1, gs + 1)}
 
     save_setup = {**setup, "draft_id": st.session_state.get("sv_draft_id")}
-    db.save_survey(save_setup, clean, flags, all_br)
+    db.save_survey(save_setup, clean, flags, all_br,
+                   response_modes=modes, stumble_flags=_stumble_flags())
 
     _reset()
     st.session_state.sv_phase = "done"
 
 
+def _stumble_flags():
+    """
+    つまずきフラグを {設問ID: メモ} で返す。
+    「戻る」で分岐が変わって通らなくなった設問のフラグは含めない。
+    """
+    out = {}
+    for qid in get_question_ids():
+        if qid in st.session_state.get("sv_history", []) and st.session_state.get(f"flag_{qid}"):
+            out[qid] = (st.session_state.get(f"flagmemo_{qid}") or "").strip()
+    return out
+
+
 def _reset():
-    """入力に関するセッションステートをクリア"""
+    """入力に関するセッションステートをクリア（sticky_setup は次の入力のために残す）"""
     remove = [k for k in list(st.session_state.keys())
-              if k.startswith(("q_", "conformity_", "sv_", "su_"))]
+              if k.startswith(INPUT_WIDGET_PREFIXES + ("sv_", "su_"))]
     for k in remove:
         del st.session_state[k]
 
@@ -479,6 +619,7 @@ def _page_done():
 # ============================================================
 
 _init()
+_render_counter()
 
 phase = st.session_state.get("sv_phase", "setup")
 if phase == "setup":

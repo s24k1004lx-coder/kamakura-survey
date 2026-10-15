@@ -2,6 +2,7 @@
 import streamlit as st
 from lib.auth import check_password
 from lib.db import get_counts
+from lib.session import keep_input_state
 
 st.set_page_config(page_title="鎌倉アンケート", layout="centered")
 
@@ -20,6 +21,9 @@ div[data-testid="stCheckbox"] label { padding: 6px 0; }
 if not check_password():
     st.stop()
 
+# 入力途中の回答がページ切り替えで消えないようにする
+keep_input_state()
+
 # --- 入力済み件数（全ページ共通） ---
 gc, rc = get_counts()
 st.caption(f"入力済み: {gc} グループ / {rc} 人")
@@ -28,5 +32,6 @@ st.caption(f"入力済み: {gc} グループ / {rc} 人")
 pg = st.navigation([
     st.Page("pages/1_input.py", title="回答入力"),
     st.Page("pages/2_review.py", title="確認・修正"),
+    st.Page("pages/3_aggregate.py", title="集計"),
 ])
 pg.run()

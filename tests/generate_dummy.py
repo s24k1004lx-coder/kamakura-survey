@@ -2,18 +2,22 @@
 import random
 import sys
 import os
+import uuid
+from datetime import date, datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.config_loader import get_questions, get_question_ids, get_locations, should_show_question
 
 # Supabase 直接操作（Streamlit なしで使うため secrets を手動読み込み）
-import toml
-from supabase import create_client
-
 SECRETS_PATH = os.path.join(os.path.dirname(__file__), "..", ".streamlit", "secrets.toml")
 
+JST = timezone(timedelta(hours=9))
+
+
 def get_client():
+    import toml
+    from supabase import create_client
     secrets = toml.load(SECRETS_PATH)
     return create_client(secrets["supabase"]["url"], secrets["supabase"]["key"])
 
@@ -124,73 +128,101 @@ def generate_one_member(force_branch=None):
     return answers, branch
 
 
-def insert_group(client, location, survey_type, input_method, group_size,
-                 all_answers, branches, conformity_flags):
-    """1 グループ分をDBに保存"""
-    g = client.table("survey_groups").insert({
-        "location": location,
-        "survey_type": survey_type,
-        "input_method": input_method,
-        "group_size": group_size,
-    }).execute()
-    gid = g.data[0]["id"]
+def build_dummy_dataset(n_groups=15, seed=None):
+    """
+    ダミーの調査データを、DBの行と同じ形の dict で作る（DBには書き込まない）。
+    戻り値は db.load_all_for_aggregation() と同じ形:
+    dict(groups, responses, answers, classifications, refusals, day_notes)
+    """
+    if seed is not None:
+        random.seed(seed)
+    locations = get_locations()
+    qids = get_question_ids()
+    days = [date(2026, 10, 24), date(2026, 10, 25), date(2026, 11, 1)]
+    out = dict(groups=[], responses=[], answers=[], classifications=[], refusals=[],
+               day_notes=[])
 
-    for m in sorted(all_answers.keys()):
-        r = client.table("responses").insert({
-            "group_id": gid,
-            "member_number": m,
-            "conformity_flag": conformity_flags.get(m, False),
-            "branch": branches.get(m),
-        }).execute()
-        rid = r.data[0]["id"]
+    for _ in range(n_groups):
+        day = random.choice(days)
+        t = datetime(day.year, day.month, day.day, random.randint(10, 16),
+                     random.randint(0, 59), tzinfo=JST)
+        loc = random.choice(locations)
+        stype = random.choice(["main", "main", "main", "pretest"])
+        method = random.choice(["field", "field", "field", "transcription"])
+        gs = 1 if random.random() < 0.6 else random.randint(2, 4)   # ソロ60%, グループ40%
+        force = random.choice(["A", "B", None])                     # 分岐の指定
+        dur = random.randint(60, 150) + 40 * (gs - 1)
+        stumbles = {}
+        if random.random() < 0.3:
+            qid = random.choice(["Q4", "Q5", "C1", "C3", "B1"])
+            stumbles[qid] = random.choice(["", "意味が伝わらなかった", "選択肢で迷った"])
 
-        for qid, ans in all_answers[m].items():
-            row = {"response_id": rid, "question_id": qid}
-            if "value" in ans:
-                row["value"] = str(ans["value"])
-            if "values" in ans:
-                row["values"] = ans["values"]
-            client.table("answers").insert(row).execute()
+        gid = str(uuid.uuid4())
+        out["groups"].append(dict(
+            id=gid, created_at=t.isoformat(), location=loc, survey_type=stype,
+            input_method=method, group_size=gs, started_at=t.isoformat(),
+            saved_at=(t + timedelta(seconds=dur)).isoformat(), duration_sec=dur,
+            stumble_flags=stumbles))
+        mode = random.choice(["interviewer", "interviewer", "self"])
 
-    return gid
+        for m in range(1, gs + 1):
+            ans, br = generate_one_member(force_branch=force)
+            rid = str(uuid.uuid4())
+            out["responses"].append(dict(
+                id=rid, group_id=gid, member_number=m,
+                conformity_flag=(gs > 1 and random.random() < 0.15),
+                branch=br, response_mode=mode))
+            for qid in sorted(ans, key=lambda k: qids.index(k.replace("_other", ""))
+                              if k.replace("_other", "") in qids else 99):
+                a = ans[qid]
+                out["answers"].append(dict(
+                    id=str(uuid.uuid4()), response_id=rid, question_id=qid,
+                    value=str(a["value"]) if "value" in a else None,
+                    values=a.get("values")))
+
+        # 回答してくれた組の前後に、断られた声かけを0〜2件
+        if method == "field":
+            for _ in range(random.choice([0, 0, 1, 1, 2])):
+                rt = t - timedelta(minutes=random.randint(1, 20))
+                out["refusals"].append(dict(id=str(uuid.uuid4()), created_at=rt.isoformat(),
+                                            location=loc, survey_type=stype))
+
+    out["day_notes"] = [
+        dict(survey_date="2026-10-24", weather="晴れ", crowd="混んでいる",
+             note="午後から団体客が増えた"),
+        dict(survey_date="2026-10-25", weather="くもり", crowd="ふつう",
+             note="駅前は立ち止まってもらいにくい"),
+    ]
+    return out
+
+
+def insert_dataset(client, ds):
+    """build_dummy_dataset() の結果を Supabase に書き込む"""
+    gid_map, rid_map = {}, {}
+    for g in ds["groups"]:
+        row = {k: v for k, v in g.items() if k != "id"}
+        gid_map[g["id"]] = client.table("survey_groups").insert(row).execute().data[0]["id"]
+    for r in ds["responses"]:
+        row = {k: v for k, v in r.items() if k != "id"}
+        row["group_id"] = gid_map[r["group_id"]]
+        rid_map[r["id"]] = client.table("responses").insert(row).execute().data[0]["id"]
+    for a in ds["answers"]:
+        row = {"response_id": rid_map[a["response_id"]], "question_id": a["question_id"]}
+        if a["value"] is not None:
+            row["value"] = a["value"]
+        if a["values"]:
+            row["values"] = a["values"]
+        client.table("answers").insert(row).execute()
+    for x in ds["refusals"]:
+        client.table("refusals").insert({k: v for k, v in x.items() if k != "id"}).execute()
 
 
 def main():
     n_groups = int(sys.argv[1]) if len(sys.argv) > 1 else 15
-
-    c = get_client()
-    locations = get_locations()
-
-    created = 0
-    for i in range(n_groups):
-        loc = random.choice(locations)
-        stype = random.choice(["main", "main", "main", "pretest"])
-        method = random.choice(["field", "field", "transcription"])
-
-        # ソロ60%, グループ40%
-        if random.random() < 0.6:
-            gs = 1
-        else:
-            gs = random.randint(2, 4)
-
-        # 分岐の指定: A, B, または None（ランダム）
-        force = random.choice(["A", "B", None])
-
-        all_ans = {}
-        brs = {}
-        flags = {}
-
-        for m in range(1, gs + 1):
-            ans, br = generate_one_member(force_branch=force)
-            all_ans[m] = ans
-            brs[m] = br
-            flags[m] = (gs > 1 and random.random() < 0.15)
-
-        gid = insert_group(c, loc, stype, method, gs, all_ans, brs, flags)
-        created += 1
-        print(f"[{created}/{n_groups}] group_id={gid}  size={gs}  branch={list(brs.values())}")
-
-    print(f"\n完了: {created} グループを生成しました")
+    ds = build_dummy_dataset(n_groups)
+    insert_dataset(get_client(), ds)
+    print(f"完了: {len(ds['groups'])} グループ / {len(ds['responses'])} 人 / "
+          f"断られた {len(ds['refusals'])} 件を生成しました")
 
 
 if __name__ == "__main__":

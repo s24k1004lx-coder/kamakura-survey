@@ -5,6 +5,8 @@ from lib.config_loader import (
 )
 from lib import db
 
+RESPONSE_MODE_LABELS = {"interviewer": "調査員が読み上げ", "self": "本人が記入"}
+
 
 # ============================================================
 # ヘルパー関数
@@ -125,13 +127,24 @@ for g in groups:
         responses = db.get_group_responses(gid)
         questions = get_questions()
 
+        # 調査記録（Phase 2.5）
+        if g.get("duration_sec") is not None:
+            st.caption(f"所要時間: {g['duration_sec'] // 60}分{g['duration_sec'] % 60}秒")
+        for qid, memo in (g.get("stumble_flags") or {}).items():
+            qtext = questions[qid]["text"] if qid in questions else qid
+            st.caption(f"⚠️ つまずき: {qtext}" + (f"：{memo}" if memo else ""))
+
         for resp in responses:
             if resp["is_deleted"]:
                 continue
             m = resp["member_number"]
+            mode = RESPONSE_MODE_LABELS.get(resp.get("response_mode"), "")
             if g["group_size"] > 1:
                 st.markdown(f"**メンバー {m}**"
-                            + (" (同調フラグ)" if resp["conformity_flag"] else ""))
+                            + (" (同調フラグ)" if resp["conformity_flag"] else "")
+                            + (f" — {mode}" if mode else ""))
+            elif mode:
+                st.caption(f"回答方式: {mode}")
 
             ans_rows = db.get_response_answers(resp["id"])
             ans_map = {a["question_id"]: a for a in ans_rows}
