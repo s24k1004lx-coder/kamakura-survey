@@ -45,6 +45,45 @@ class TestWizard(unittest.TestCase):
         self.assertTrue(saved["setup"]["started_at"])
 
 
+class TestCopyAll(unittest.TestCase):
+    def test_copy_member1_on_every_question(self):
+        """「全員同じ」でエラーにならず、メンバー1の回答が全員にコピーされる（単一・複数選択・自由記述）"""
+        from tests.drive_input import _first_value
+        fake_db.install()
+        at = AppTest.from_file(PAGE, default_timeout=30).run()
+        at.radio(key="su_mode").set_value("グループ").run()
+        at.slider(key="su_gs").set_value(3).run()
+        _button(at, "入力開始").click().run()
+        for _ in range(60):
+            self.assertFalse(at.exception, at.exception)
+            if _button(at, "保存する"):
+                _button(at, "保存する").click().run()
+                break
+            # メンバー1だけ入力してからコピーする（メンバー2・3は触らない）
+            for r in at.radio:
+                if r.key and r.key.startswith("q_") and r.key.endswith("_m1") and r.value is None:
+                    r.set_value(_first_value(r))
+            cbs = [c for c in at.checkbox if c.key and "_m1_" in c.key]
+            if cbs and not any(c.value for c in cbs):
+                cbs[0].check()
+            for t in at.text_area:
+                if t.key and t.key.endswith("_m1") and not t.value:
+                    t.input("メンバー1の感想")
+            at.run()
+            copy = _button(at, "全員同じ（メンバー1をコピー）")
+            if copy:
+                copy.click().run()
+                self.assertFalse(at.exception, at.exception)
+                self.assertTrue(_button(at, "次へ →"), "コピー後に「次へ」が表示されていない")
+            _button(at, "次へ →").click().run()
+            # コピーされていない欄があれば「選択してください」等のエラーになる
+            self.assertFalse([e.value for e in at.error])
+        saved = fake_db.STORE["saved"][0]["answers"]
+        self.assertEqual(saved[1], saved[2])
+        self.assertEqual(saved[1], saved[3])
+        self.assertEqual(saved[2].get("A6"), {"value": "メンバー1の感想"})
+
+
 class TestCounter(unittest.TestCase):
     def _header(self, at):
         return next(m.value for m in at.markdown if "声かけ" in m.value)

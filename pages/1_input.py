@@ -423,10 +423,11 @@ def _page_question():
             _render_widget(cur, q, m, solo)
 
     # 「全員同じ」ボタン
+    # 描画済みウィジェットの値はその回の実行中に書き換えられないので、
+    # コピーは on_click（次の実行でウィジェットを描画する前に動く）で行う
     if not solo and len(vis) > 1:
-        if st.button("全員同じ（メンバー1をコピー）", use_container_width=True):
-            _copy_all(cur, q, vis)
-            st.rerun()
+        st.button("全員同じ（メンバー1をコピー）", use_container_width=True,
+                  on_click=_copy_all, args=(cur, q, vis))
 
     st.markdown("---")
 
