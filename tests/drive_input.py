@@ -20,11 +20,15 @@ def _button(at, label):
     return None
 
 
-def _fill_current(at):
-    """表示中の設問ウィジェットを機械的に埋める（未回答のものだけ）"""
+def _fill_current(at, choices=None):
+    """表示中の設問ウィジェットを機械的に埋める（未回答のものだけ）
+
+    choices: {設問ID: value} で単一選択の答えを指定（省略時は最初の選択肢）
+    """
     for r in at.radio:
         if r.key and r.key.startswith("q_") and r.value is None:
-            r.set_value(_first_value(r))
+            qid = r.key[2:].rsplit("_m", 1)[0]
+            r.set_value((choices or {}).get(qid) or _first_value(r))
     cbs = [c for c in at.checkbox if c.key and c.key.startswith("q_")]
     members = {}
     for c in cbs:
@@ -45,7 +49,7 @@ def _first_value(r):
     return get_questions()[qid]["options"][0]["value"]
 
 
-def run(group_size=1, flag_first=False):
+def run(group_size=1, flag_first=False, choices=None):
     fake_db.install()
     at = AppTest.from_file(os.path.join(ROOT, "pages", "1_input.py"), default_timeout=30).run()
     if group_size > 1:
@@ -64,7 +68,7 @@ def run(group_size=1, flag_first=False):
             at.toggle(key=next(t.key for t in at.toggle if t.key.startswith("flag_"))).set_value(True).run()
             at.text_input(key=next(t.key for t in at.text_input
                                    if t.key.startswith("flagmemo_"))).input("意味が伝わらず").run()
-        _fill_current(at)
+        _fill_current(at, choices)
         at.run()
         _button(at, "次へ →").click().run()
         errs = [e.value for e in at.error]

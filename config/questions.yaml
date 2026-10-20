@@ -17,7 +17,7 @@ preamble: >
 # type: single_choice / multi_choice / free_text / scale
 # required: 必須かどうか
 # branch: この設問が属する分岐（省略 = 全員に表示）
-# show_if: 表示条件（他の設問の回答に依存）
+# show_if: 表示条件（他の設問の回答に依存）。リストで書くと「すべて満たす」、values で「いずれかに一致」
 # has_other: 「その他（記述）」を追加
 # max_select: 複数選択の上限数
 # determines_branch: 分岐を決定する設問
@@ -60,11 +60,13 @@ questions:
     type: single_choice
     required: true
     options:
-      - label: "2時間未満"
-        value: "under_2h"
+      - label: "1時間くらい（学校・仕事帰りなどにちょっと寄った）"
+        value: "about_1h"
+      - label: "2〜3時間"
+        value: "2to3h"
       - label: "半日程度"
         value: "half_day"
-      - label: "1日"
+      - label: "1日（江の島など周辺とセットも含む）"
         value: "full_day"
       - label: "宿泊"
         value: "overnight"
@@ -272,6 +274,51 @@ questions:
     required: false
     branch: "B"
     codebook: "B2"
+
+  # === 分岐なし：クルッポを知らなかった人（Q5=ない かつ Q6=使ったことはない） ===
+  D1:
+    text: "このような仕組みがあったら、使ってみたいと思いますか？"
+    description: "（調査員が一言で説明：「鎌倉で良い行動をするとコインがもらえて、お店の体験と交換できるアプリです」）"
+    type: single_choice
+    required: true
+    show_if:
+      - question_id: "Q5"
+        value: "no"
+      - question_id: "Q6"
+        value: "never"
+    options:
+      - label: "使ってみたい"
+        value: "yes"
+      - label: "条件によっては使ってみたい"
+        value: "maybe"
+      - label: "使わないと思う"
+        value: "no"
+
+  D2:
+    text: "使わない・迷う理由"
+    type: multi_choice
+    required: true
+    has_other: true
+    show_if:
+      - question_id: "Q5"
+        value: "no"
+      - question_id: "Q6"
+        value: "never"
+      - question_id: "D1"
+        values: ["maybe", "no"]
+    options:
+      - label: "アプリを入れるのが面倒"
+        value: "app_trouble"
+      - label: "何に使えるのかわからない"
+        value: "unclear_use"
+      - label: "現金に換えられないなら意味がない"
+        value: "no_cash"
+      - label: "滞在時間が短く余裕がない"
+        value: "no_time"
+      - label: "観光中にスマホを操作したくない"
+        value: "no_phone"
+      - label: "得になる気がしない"
+        value: "no_benefit"
 
   # === 共通（全員） ===
   C1:

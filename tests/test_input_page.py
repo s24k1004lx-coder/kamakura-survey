@@ -37,6 +37,30 @@ class TestWizard(unittest.TestCase):
             self.assertIn("Q1", saved["answers"][m])
             self.assertIn("Q8", saved["answers"][m])
 
+    def test_unaware_gets_d_questions(self):
+        """クルッポを知らない人（Q5=ない・Q6=使ったことはない）には D1・D2 が出る"""
+        _, store = run(1, choices={"Q5": "no", "Q6": "never", "D1": "no"})
+        saved = store["saved"][0]
+        ans = saved["answers"][1]
+        self.assertIsNone(saved["branches"][1])
+        self.assertEqual(ans["D1"]["value"], "no")
+        self.assertIn("D2", ans)
+        self.assertNotIn("A1", ans)
+        self.assertNotIn("B1", ans)
+
+    def test_d2_skipped_when_willing(self):
+        _, store = run(1, choices={"Q5": "no", "Q6": "never", "D1": "yes"})
+        ans = store["saved"][0]["answers"][1]
+        self.assertIn("D1", ans)
+        self.assertNotIn("D2", ans)
+
+    def test_aware_skips_d_questions(self):
+        """Q5=ある なら Q6=使ったことはない でも分岐B に入り、D1 は出ない"""
+        _, store = run(1, choices={"Q5": "yes", "Q6": "never"})
+        saved = store["saved"][0]
+        self.assertEqual(saved["branches"][1], "B")
+        self.assertNotIn("D1", saved["answers"][1])
+
     def test_phase25_fields_are_saved(self):
         _, store = run(2, flag_first=True)
         saved = store["saved"][0]

@@ -55,11 +55,17 @@ def should_show_question(qid, member_answers, member_branch):
             return False
 
     # 表示条件つき設問: 依存設問の回答が条件値と一致しなければ非表示
+    # show_if は条件1つ、または条件のリスト（すべて満たすと表示）
     if "show_if" in q:
-        cond = q["show_if"]
-        actual = member_answers.get(cond["question_id"], {}).get("value")
-        if actual != cond["value"]:
-            return False
+        conds = q["show_if"]
+        if isinstance(conds, dict):
+            conds = [conds]
+        for cond in conds:
+            actual = member_answers.get(cond["question_id"], {}).get("value")
+            # value: 1つの値と一致 / values: いずれかの値と一致
+            allowed = cond["values"] if "values" in cond else [cond["value"]]
+            if actual not in allowed:
+                return False
 
     return True
 
