@@ -65,8 +65,10 @@ def save_draft(group_data, draft_payload):
         "session_draft": draft_payload,
     }
     if draft_id:
-        c.table("survey_groups").update(row).eq("id", draft_id).execute()
-        return draft_id
+        # 下書きが「破棄」などで消えていると UPDATE は0行で終わる（エラーにならない）。
+        # その場合は新しい下書きとして作り直す
+        if c.table("survey_groups").update(row).eq("id", draft_id).execute().data:
+            return draft_id
     result = c.table("survey_groups").insert(row).execute()
     return result.data[0]["id"]
 
@@ -126,11 +128,14 @@ def save_survey(setup, all_answers, conformity_flags, branches,
         "stumble_flags": stumble_flags or {},
     }
 
+    group_id = None
     if draft_id:
-        c.table("survey_groups").update({"session_draft": None, **group_row}) \
+        upd = c.table("survey_groups").update({"session_draft": None, **group_row}) \
             .eq("id", draft_id).execute()
-        group_id = draft_id
-    else:
+        if upd.data:
+            group_id = draft_id
+    if group_id is None:
+        # 下書きがない、または消えていた場合は新しいグループとして保存する
         res = c.table("survey_groups").insert(group_row).execute()
         group_id = res.data[0]["id"]
 

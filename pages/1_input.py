@@ -350,6 +350,9 @@ def _page_setup():
             with c3:
                 if st.button("破棄", key=f"del_{dr['id']}"):
                     db.delete_draft(dr["id"])
+                    # 「設定に戻る」で中断した入力そのものを破棄したなら、画面側の途中の回答も捨てる
+                    if st.session_state.get("sv_draft_id") == dr["id"]:
+                        _reset()
                     st.rerun()
 
     st.markdown("---")
@@ -525,7 +528,13 @@ def _page_review():
             st.rerun()
     with c2:
         if st.button("保存する", use_container_width=True, type="primary"):
-            _do_save()
+            try:
+                _do_save()
+            except Exception as e:
+                # 回答は画面に残っているので、通信が戻ればもう一度押せば保存できる
+                st.error("保存に失敗しました。回答は消えていないので、少し待ってからもう一度「保存する」を押してください。"
+                         f"\n\n詳細: {e}")
+                return
             st.rerun()
 
 

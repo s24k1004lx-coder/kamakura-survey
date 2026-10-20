@@ -84,6 +84,26 @@ class TestCopyAll(unittest.TestCase):
         self.assertEqual(saved[2].get("A6"), {"value": "メンバー1の感想"})
 
 
+class TestDiscardDraft(unittest.TestCase):
+    def test_back_to_setup_discard_then_restart(self):
+        """「設定に戻る」→ その下書きを「破棄」→「入力開始」で、前の回答と下書きIDが残らない"""
+        at = _new_app()
+        at.radio(key="su_mode").set_value("グループ").run()
+        at.slider(key="su_gs").set_value(2).run()
+        _button(at, "入力開始").click().run()
+        old_id = at.session_state["sv_draft_id"]
+        at.radio(key="q_Q1_m1").set_value("kamakura").run()
+        _button(at, "← 設定に戻る").click().run()
+        _button(at, "破棄").click().run()
+        self.assertFalse(at.exception, at.exception)
+        self.assertNotIn(old_id, fake_db.STORE["drafts"])
+        self.assertNotIn("q_Q1_m1", at.session_state)
+        self.assertNotIn("sv_draft_id", at.session_state)
+        _button(at, "入力開始").click().run()
+        self.assertNotEqual(at.session_state["sv_draft_id"], old_id)
+        self.assertIsNone(at.radio(key="q_Q1_m1").value)
+
+
 class TestCounter(unittest.TestCase):
     def _header(self, at):
         return next(m.value for m in at.markdown if "声かけ" in m.value)
